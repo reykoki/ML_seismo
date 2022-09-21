@@ -19,6 +19,7 @@ print(model)
 model.cuda();
 
 data = sbd.STEAD(basepath='/scratch/alpine/mecr8410/PhaseNet/dataset/datasets/stead/', sampling_rate=100)
+#data = sbd.DummyDataset(sampling_rate=100)
 data.preload_waveforms(pbar=True)
 
 train, dev, test = data.train_dev_test()
@@ -42,16 +43,25 @@ augmentations = [
 
 ]
 
-train_generator.add_augmentations(augmentations)
 dev_generator.add_augmentations(augmentations)
 
+augmentations = [
+        sbg.Scalogram(),
+]
+
+print(dev_generator[0])
+print(dev_generator[1])
+dev_generator.add_augmentations(augmentations)
+print(dev_generator[0])
+print(dev_generator[1])
 
 wf_dict = {}
-
-for i in range(250):
-    rand_int = np.random.randint(len(train_generator))
-    sample = train_generator[rand_int]
-    wf_dict.update({rand_int: {'data': sample['X'], 'truth': sample['y'] }})
+for i in range(25):
+    rand_int = np.random.randint(len(dev_generator))
+    sample = dev_generator[rand_int]
+    print(np.sum(sample['y'][0]))
+    print(np.sum(sample['y'][1]))
+    wf_dict.update({rand_int: {'data': sample['X'], 'truth': sample['y'], 'sum_P': np.sum(sample['y'][0]), 'sum_S': np.sum(sample['y'][1]) }})
 
 with open('stead_samples.pickle', 'wb') as handle:
         pickle.dump(wf_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
