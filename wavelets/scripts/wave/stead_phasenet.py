@@ -14,13 +14,14 @@ from obspy import UTCDateTime
 
 
 print('finished importing')
-model = sbm.PhaseNet(phases="PSN")
+model = sbm.PhaseNet(phases="PSN", in_channels=96)
 print(model)
 
 model.cuda();
 
-data = sbd.STEAD(phases='PSN', cache='full')
+data = sbd.STEAD(cache='full')
 data.preload_waveforms(pbar=True)
+
 
 train, dev, test = data.train_dev_test()
 
@@ -45,15 +46,23 @@ augmentations = [
 train_generator.add_augmentations(augmentations)
 dev_generator.add_augmentations(augmentations)
 
+scalo = [
+        sbg.Scalogram(),
+        sbg.ChangeDtype(np.float32),
+]
+
+train_generator.add_augmentations(scalo)
+dev_generator.add_augmentations(scalo)
+
 batch_size = 512
 num_workers = 4  # The number of threads used for loading data
-#batch_size = 16
+#batch_size = 1
 #num_workers = 1  # The number of threads used for loading data
 
 train_loader = DataLoader(train_generator, batch_size=batch_size, shuffle=True, num_workers=num_workers, worker_init_fn=worker_seeding)
 dev_loader = DataLoader(dev_generator, batch_size=batch_size, shuffle=False, num_workers=num_workers, worker_init_fn=worker_seeding)
 
-learning_rate = 1e-3
+learning_rate = 1e-2
 epochs = 100
 
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
@@ -70,11 +79,7 @@ def train_loop(dataloader):
     for batch_id, batch in enumerate(dataloader):
         # Compute prediction and loss
         optimizer.zero_grad()
-        data = batch["X"].to(model.device)
-        check = int((data != data).sum())
-        if check > 0:
-            'data contain Nan'
-        pred = model(data)
+        pred = model(batch["X"].to(model.device))
         loss = loss_fn(pred, batch["y"].to(model.device))
         # Backpropagation
         loss.backward()
@@ -87,12 +92,10 @@ def train_loop(dataloader):
 def val_loop(dataloader):
     num_batches = len(dataloader)
     test_loss = 0
-
     with torch.no_grad():
         for batch in dataloader:
             pred = model(batch["X"].to(model.device))
             test_loss += loss_fn(pred, batch["y"].to(model.device)).item()
-
     test_loss /= num_batches
     print(f"Validation loss: {test_loss:>8f} \n")
     return test_loss
